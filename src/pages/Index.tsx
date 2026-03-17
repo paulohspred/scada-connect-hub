@@ -1,16 +1,52 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { KpiCard } from "@/components/KpiCard";
+import { TrafficChart } from "@/components/TrafficChart";
+import { DeviceTable } from "@/components/DeviceTable";
+import { DeviceStatusChart } from "@/components/DeviceStatusChart";
+import { mockDevices, formatBytes } from "@/lib/mockData";
+import { Radio, ClipboardCheck, Activity, Plug } from "lucide-react";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Dashboard = () => {
+  const online = mockDevices.filter(d => d.status === 'online').length;
+  const pending = mockDevices.filter(d => d.status === 'pending').length;
+  const totalTx = mockDevices.reduce((s, d) => s + d.bytesTx, 0);
+  const scadaActive = mockDevices.filter(d => d.scadaPort && d.status === 'online').length;
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <DashboardLayout>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold tracking-tighter text-foreground">Dashboard</h2>
+          <p className="text-xs text-muted-foreground">Visão geral do tráfego em RC Gateway</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-success animate-pulse-online" />
+          <span className="text-xs font-medium text-success">Operacional</span>
+        </div>
+      </div>
+
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard title="Online" value={online} subtitle={`Conexões ativas em ${mockDevices.length} dispositivos`} icon={Radio} variant="success" />
+        <KpiCard title="Pendentes" value={pending} subtitle="Aguardando aprovação" icon={ClipboardCheck} variant="warning" />
+        <KpiCard title="Tráfego Total" value={formatBytes(totalTx)} subtitle="Soma de TX acumulado" icon={Activity} />
+        <KpiCard title="SCADA Ativas" value={scadaActive} subtitle="Bridges operacionais" icon={Plug} variant="success" />
+      </div>
+
+      {/* Charts Row */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TrafficChart />
+        </div>
+        <DeviceStatusChart />
+      </div>
+
+      {/* Device Table */}
+      <div className="mt-4">
+        <DeviceTable />
+      </div>
+    </DashboardLayout>
   );
 };
 
-const Index = PlaceholderIndex;
-
-export default Index;
+export default Dashboard;
