@@ -1,19 +1,25 @@
 import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
-import { mockDevices } from "@/lib/mockData";
+import type { Device } from "@/hooks/useData";
 
-export function DeviceStatusChart() {
-  const online = mockDevices.filter(d => d.status === 'online').length;
-  const offline = mockDevices.filter(d => d.status === 'offline').length;
-  const pending = mockDevices.filter(d => d.status === 'pending').length;
+interface Props {
+  devices?: Device[];
+}
+
+export function DeviceStatusChart({ devices = [] }: Props) {
+  const online = devices.filter(d => d.status === 'online').length;
+  const offline = devices.filter(d => d.status === 'offline').length;
+  const pending = devices.filter(d => d.status === 'pending').length;
+  const approved = devices.filter(d => d.status === 'approved').length;
 
   const data = [
     { name: "Online", value: online, color: "hsl(142, 71%, 45%)" },
     { name: "Offline", value: offline, color: "hsl(0, 84%, 60%)" },
     { name: "Pendente", value: pending, color: "hsl(38, 92%, 50%)" },
-  ];
+    { name: "Aprovado", value: approved, color: "hsl(24, 100%, 50%)" },
+  ].filter(d => d.value > 0);
 
-  const total = mockDevices.length;
+  const total = devices.length;
 
   return (
     <motion.div
@@ -31,16 +37,7 @@ export function DeviceStatusChart() {
         <div className="relative h-28 w-28">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={32}
-                outerRadius={48}
-                paddingAngle={3}
-                dataKey="value"
-                stroke="none"
-              >
+              <Pie data={data} cx="50%" cy="50%" innerRadius={32} outerRadius={48} paddingAngle={3} dataKey="value" stroke="none">
                 {data.map((entry, index) => (
                   <Cell key={index} fill={entry.color} />
                 ))}
@@ -52,7 +49,6 @@ export function DeviceStatusChart() {
             <span className="text-[9px] text-muted-foreground">Total</span>
           </div>
         </div>
-
         <div className="space-y-2">
           {data.map((item) => (
             <div key={item.name} className="flex items-center gap-2">
