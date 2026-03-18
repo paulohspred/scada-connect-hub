@@ -3,14 +3,16 @@ import { KpiCard } from "@/components/KpiCard";
 import { TrafficChart } from "@/components/TrafficChart";
 import { DeviceTable } from "@/components/DeviceTable";
 import { DeviceStatusChart } from "@/components/DeviceStatusChart";
-import { mockDevices, formatBytes } from "@/lib/mockData";
+import { useDevices, formatBytes } from "@/hooks/useData";
 import { Radio, ClipboardCheck, Activity, Plug } from "lucide-react";
 
 const Dashboard = () => {
-  const online = mockDevices.filter(d => d.status === 'online').length;
-  const pending = mockDevices.filter(d => d.status === 'pending').length;
-  const totalTx = mockDevices.reduce((s, d) => s + d.bytesTx, 0);
-  const scadaActive = mockDevices.filter(d => d.scadaPort && d.status === 'online').length;
+  const { data: devices = [], isLoading } = useDevices();
+
+  const online = devices.filter(d => d.status === 'online').length;
+  const pending = devices.filter(d => d.status === 'pending').length;
+  const totalTx = devices.reduce((s, d) => s + (d.bytes_tx || 0), 0);
+  const scadaActive = devices.filter(d => d.scada_port && d.status === 'online').length;
 
   return (
     <DashboardLayout>
@@ -25,25 +27,22 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KPI Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Online" value={online} subtitle={`Conexões ativas em ${mockDevices.length} dispositivos`} icon={Radio} variant="success" />
+        <KpiCard title="Online" value={online} subtitle={`Conexões ativas em ${devices.length} dispositivos`} icon={Radio} variant="success" />
         <KpiCard title="Pendentes" value={pending} subtitle="Aguardando aprovação" icon={ClipboardCheck} variant="warning" />
         <KpiCard title="Tráfego Total" value={formatBytes(totalTx)} subtitle="Soma de TX acumulado" icon={Activity} />
         <KpiCard title="SCADA Ativas" value={scadaActive} subtitle="Bridges operacionais" icon={Plug} variant="success" />
       </div>
 
-      {/* Charts Row */}
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <TrafficChart />
         </div>
-        <DeviceStatusChart />
+        <DeviceStatusChart devices={devices} />
       </div>
 
-      {/* Device Table */}
       <div className="mt-4">
-        <DeviceTable />
+        <DeviceTable devices={devices} />
       </div>
     </DashboardLayout>
   );
