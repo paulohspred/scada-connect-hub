@@ -7,6 +7,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  useRealtimeSync();
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar />
