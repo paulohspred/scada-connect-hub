@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
+import { useRealtimeSync } from "@/hooks/useData";
 
 interface DashboardLayoutProps {
   children: ReactNode;
