@@ -1,8 +1,38 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { useEffect } from "react";
 
 export type Device = Tables<"devices">;
+
+// Realtime hook — invalidates queries when devices or events change
+export function useRealtimeSync() {
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime-sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "devices" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["devices"] });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "events" },
+        () => {
+          qc.invalidateQueries({ queryKey: ["events"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
 
 export function useDevices() {
   return useQuery({
