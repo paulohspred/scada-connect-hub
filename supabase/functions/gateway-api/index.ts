@@ -1,25 +1,53 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-gateway-key",
-};
+// ── Auth ──────────────────────────────────────────────────────────────────
+// GATEWAY_API_KEY is REQUIRED in production.
+// Set it in Supabase Edge Function secrets.
+// If not set, all requests are rejected (fail-safe).
+const EXPECTED_KEY = Deno.env.get("GATEWAY_API_KEY") ?? "";
 
-Deno.serve(async (req) => {
+// ── CORS ─────────────────────────────────────────────────────────────────
+// Set ALLOWED_ORIGIN in Supabase Edge Function secrets.
+// e.g. "https://gateway.rcgeradores.com.br"
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "";
+
+function corsHeaders(requestOrigin: string | null) {
+  const origin =
+    ALLOWED_ORIGIN && requestOrigin === ALLOWED_ORIGIN
+      ? requestOrigin
+      : ALLOWED_ORIGIN || "";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-gateway-key",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  };
+}
+
+function jsonResponse(data: unknown, status = 200, requestOrigin: string | null = null) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders(requestOrigin), "Content-Type": "application/json" },
+  });
+}
+
+Deno.serve(async (req: Request) => {
+  const requestOrigin = req.headers.get("origin");
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(requestOrigin) });
   }
 
-  // Authenticate via x-gateway-key header
+  // ── Authenticate via x-gateway-key ───────────────────────────────────────
+  // If GATEWAY_API_KEY is not configured, DENY all requests (fail-safe).
+  // This prevents accidental open access in production.
   const gatewayKey = req.headers.get("x-gateway-key");
-  const expectedKey = Deno.env.get("GATEWAY_API_KEY");
-
-  if (!expectedKey || gatewayKey !== expectedKey) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (!EXPECTED_KEY) {
+    console.error("GATEWAY_API_KEY is not set — rejecting all requests for safety");
+    return jsonResponse({ error: "Service not configured" }, 503, requestOrigin);
+  }
+  if (gatewayKey !== EXPECTED_KEY) {
+    return jsonResponse({ error: "Unauthorized" }, 401, requestOrigin);
   }
 
   const supabase = createClient(
@@ -37,7 +65,12 @@ Deno.serve(async (req) => {
       const { identifier, source_ip, source_port, signal_dbm } = body;
 
       if (!identifier) {
-        return jsonResponse({ error: "identifier is required" }, 400);
+        return jsonResponse({ error: "identifier is required" }, 400, requestOrigin);
+      }
+
+      // Validate identifier format (prevent injection)
+      if (typeof identifier !== "string" || identifier.length > 64 || !/^[A-Za-z0-9_-]+$/.test(identifier)) {
+        return jsonResponse({ error: "invalid identifier format" }, 400, requestOrigin);
       }
 
       // Check if device already exists
@@ -67,7 +100,7 @@ Deno.serve(async (req) => {
           device_id: existing.id,
           scada_port: existing.scada_port,
           status: existing.status === "approved" ? "online" : existing.status,
-        });
+        }, 200, requestOrigin);
       } else {
         // Create pending device
         const { data: newDevice, error } = await supabase
@@ -95,7 +128,7 @@ Deno.serve(async (req) => {
           device_id: newDevice.id,
           status: "pending",
           scada_port: null,
-        });
+        }, 200, requestOrigin);
       }
     }
 
@@ -105,7 +138,12 @@ Deno.serve(async (req) => {
       const { devices } = body;
 
       if (!Array.isArray(devices)) {
-        return jsonResponse({ error: "devices array is required" }, 400);
+        return jsonResponse({ error: "devices array is required" }, 400, requestOrigin);
+      }
+
+      // Limit batch size to prevent abuse
+      if (devices.length > 100) {
+        return jsonResponse({ error: "batch size limit is 100" }, 400, requestOrigin);
       }
 
       const results = [];
@@ -141,7 +179,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      return jsonResponse({ updated: results.length, devices: results });
+      return jsonResponse({ updated: results.length, devices: results }, 200, requestOrigin);
     }
 
     // POST /gateway-api/disconnect — Mark device as offline
@@ -167,10 +205,10 @@ Deno.serve(async (req) => {
           message: `Device disconnected`,
         });
 
-        return jsonResponse({ action: "disconnected", device_id: data.id });
+        return jsonResponse({ action: "disconnected", device_id: data.id }, 200, requestOrigin);
       }
 
-      return jsonResponse({ action: "no_change", device_id: data?.id || null });
+      return jsonResponse({ action: "no_change", device_id: data?.id || null }, 200, requestOrigin);
     }
 
     // GET /gateway-api/config — Get approved devices with their port bindings
@@ -182,19 +220,12 @@ Deno.serve(async (req) => {
         .not("scada_port", "is", null)
         .order("scada_port", { ascending: true });
 
-      return jsonResponse({ devices: devices || [] });
+      return jsonResponse({ devices: devices || [] }, 200, requestOrigin);
     }
 
-    return jsonResponse({ error: "Not found" }, 404);
+    return jsonResponse({ error: "Not found" }, 404, requestOrigin);
   } catch (err) {
     console.error("Gateway API error:", err);
-    return jsonResponse({ error: "Internal server error" }, 500);
-  }
-
-  function jsonResponse(data: unknown, status = 200) {
-    return new Response(JSON.stringify(data), {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Internal server error" }, 500, requestOrigin);
   }
 });

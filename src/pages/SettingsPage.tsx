@@ -1,27 +1,104 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Settings as SettingsIcon, Save, Server, Shield, Bell, Database } from "lucide-react";
+import { Settings as SettingsIcon, Save, Server, Shield, Bell, Database, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { useGatewaySettings } from "@/hooks/useData";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+
+const DEFAULT_CONFIG = {
+  gatewayName: "RC Gateway",
+  modemPortMin: "7000",
+  modemPortMax: "8000",
+  scadaPortStart: "9001",
+  scadaPortEnd: "10000",
+  autoApprove: false,
+  maxConnections: "1000",
+  tcpTimeout: "300",
+  heartbeatInterval: "10",
+  logRetentionDays: "30",
+  notifyDisconnect: true,
+  notifyNewDevice: true,
+  notifySignalLow: true,
+  signalThreshold: "-80",
+};
+
+type Config = typeof DEFAULT_CONFIG;
+
+// Map DB keys to config fields
+const DB_KEY_MAP: Record<string, (v: any) => Partial<Config>> = {
+  port_range_input: (v) => ({ modemPortMin: String(v.min), modemPortMax: String(v.max) }),
+  port_range_scada: (v) => ({ scadaPortStart: String(v.min), scadaPortEnd: String(v.max) }),
+  tcp_timeout: (v) => ({ tcpTimeout: String(v.seconds) }),
+  auto_identify: (v) => ({ autoApprove: v.enabled }),
+  gateway_name: (v) => ({ gatewayName: String(v.value ?? "RC Gateway") }),
+  max_connections: (v) => ({ maxConnections: String(v.value ?? "1000") }),
+  heartbeat_interval: (v) => ({ heartbeatInterval: String(v.seconds ?? "10") }),
+  log_retention_days: (v) => ({ logRetentionDays: String(v.days ?? "30") }),
+  notify_disconnect: (v) => ({ notifyDisconnect: v.enabled }),
+  notify_new_device: (v) => ({ notifyNewDevice: v.enabled }),
+  notify_signal_low: (v) => ({ notifySignalLow: v.enabled }),
+  signal_threshold_dbm: (v) => ({ signalThreshold: String(v.value ?? "-80") }),
+};
 
 const SettingsPage = () => {
-  const [config, setConfig] = useState({
-    gatewayName: "RC Gateway",
-    modemPortRange: "7000-8000",
-    scadaPortStart: "9001",
-    autoApprove: false,
-    maxConnections: "1000",
-    tcpTimeout: "30",
-    heartbeatInterval: "10",
-    logRetentionDays: "30",
-    notifyDisconnect: true,
-    notifyNewDevice: true,
-    notifySignalLow: true,
-    signalThreshold: "-80",
-  });
+  const { hasRole } = useAuth();
+  const canManage = hasRole("admin");
+  const qc = useQueryClient();
+  const { data: settingsRows = [] } = useGatewaySettings();
+  const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    toast.success("Configurações salvas com sucesso");
+  // Hydrate local state from DB rows
+  useEffect(() => {
+    if (!settingsRows.length) return;
+    let merged: Partial<Config> = {};
+    for (const row of settingsRows as any[]) {
+      const mapper = DB_KEY_MAP[row.key];
+      if (mapper) merged = { ...merged, ...mapper(row.value) };
+    }
+    setConfig((prev) => ({ ...prev, ...merged }));
+  }, [settingsRows]);
+
+  const handleSave = async () => {
+    if (!canManage) {
+      toast.error("Apenas administradores podem alterar configurações");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Build upsert payload for each gateway_settings key
+      const upserts = [
+        { key: "port_range_input", value: { min: Number(config.modemPortMin), max: Number(config.modemPortMax) } },
+        { key: "port_range_scada", value: { min: Number(config.scadaPortStart), max: Number(config.scadaPortEnd) } },
+        { key: "tcp_timeout", value: { seconds: Number(config.tcpTimeout) } },
+        { key: "auto_identify", value: { enabled: config.autoApprove } },
+        { key: "gateway_name", value: { value: config.gatewayName } },
+        { key: "max_connections", value: { value: Number(config.maxConnections) } },
+        { key: "heartbeat_interval", value: { seconds: Number(config.heartbeatInterval) } },
+        { key: "log_retention_days", value: { days: Number(config.logRetentionDays) } },
+        { key: "notify_disconnect", value: { enabled: config.notifyDisconnect } },
+        { key: "notify_new_device", value: { enabled: config.notifyNewDevice } },
+        { key: "notify_signal_low", value: { enabled: config.notifySignalLow } },
+        { key: "signal_threshold_dbm", value: { value: Number(config.signalThreshold) } },
+      ];
+
+      for (const upsert of upserts) {
+        const { error } = await supabase
+          .from("gateway_settings")
+          .upsert(upsert, { onConflict: "key" });
+        if (error) throw error;
+      }
+
+      await qc.invalidateQueries({ queryKey: ["gateway_settings"] });
+      toast.success("Configurações salvas com sucesso");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao salvar configurações");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sections = [
@@ -30,8 +107,10 @@ const SettingsPage = () => {
       icon: Server,
       fields: [
         { key: "gatewayName", label: "Nome do Gateway", type: "text" },
-        { key: "modemPortRange", label: "Range de Portas Modem", type: "text" },
+        { key: "modemPortMin", label: "Porta Modem Mínima", type: "text" },
+        { key: "modemPortMax", label: "Porta Modem Máxima", type: "text" },
         { key: "scadaPortStart", label: "Porta SCADA Inicial", type: "text" },
+        { key: "scadaPortEnd", label: "Porta SCADA Final", type: "text" },
         { key: "maxConnections", label: "Máximo de Conexões", type: "text" },
       ],
     },
@@ -72,12 +151,21 @@ const SettingsPage = () => {
         </div>
         <button
           onClick={handleSave}
-          className="flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          disabled={saving || !canManage}
+          className="flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+          title={!canManage ? "Apenas administradores podem salvar" : ""}
         >
           <Save className="h-3.5 w-3.5" />
-          Salvar
+          {saving ? "Salvando..." : "Salvar"}
         </button>
       </div>
+
+      {!canManage && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
+          <Lock className="h-4 w-4 text-warning" />
+          <p className="text-xs text-warning">Você está no modo leitura. Apenas administradores podem editar configurações.</p>
+        </div>
+      )}
 
       <div className="space-y-4">
         {sections.map((section, si) => {
@@ -103,23 +191,27 @@ const SettingsPage = () => {
                     <label className="text-xs text-muted-foreground">{field.label}</label>
                     {field.type === "toggle" ? (
                       <button
-                        onClick={() => setConfig({ ...config, [field.key]: !config[field.key as keyof typeof config] })}
-                        className={`relative h-5 w-9 rounded-full transition-colors ${
-                          config[field.key as keyof typeof config] ? "bg-primary" : "bg-secondary"
+                        disabled={!canManage}
+                        onClick={() =>
+                          setConfig({ ...config, [field.key]: !config[field.key as keyof Config] })
+                        }
+                        className={`relative h-5 w-9 rounded-full transition-colors disabled:cursor-not-allowed ${
+                          config[field.key as keyof Config] ? "bg-primary" : "bg-secondary"
                         }`}
                       >
                         <div
                           className={`absolute top-0.5 h-4 w-4 rounded-full bg-foreground transition-transform ${
-                            config[field.key as keyof typeof config] ? "translate-x-4" : "translate-x-0.5"
+                            config[field.key as keyof Config] ? "translate-x-4" : "translate-x-0.5"
                           }`}
                         />
                       </button>
                     ) : (
                       <input
                         type="text"
-                        value={config[field.key as keyof typeof config] as string}
+                        disabled={!canManage}
+                        value={config[field.key as keyof Config] as string}
                         onChange={(e) => setConfig({ ...config, [field.key]: e.target.value })}
-                        className="h-8 w-48 rounded-md border border-border bg-background px-3 text-right text-xs tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="h-8 w-48 rounded-md border border-border bg-background px-3 text-right text-xs tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     )}
                   </div>

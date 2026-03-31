@@ -1,8 +1,8 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
-import { TrafficChart } from "@/components/TrafficChart";
 import { DeviceTable } from "@/components/DeviceTable";
 import { DeviceStatusChart } from "@/components/DeviceStatusChart";
+import { TrafficChart } from "@/components/TrafficChart";
 import { useDevices, formatBytes } from "@/hooks/useData";
 import { Radio, ClipboardCheck, Activity, Plug } from "lucide-react";
 
@@ -38,7 +38,9 @@ const Dashboard = () => {
         <div className="lg:col-span-2">
           <TrafficChart />
         </div>
-        <DeviceStatusChart devices={devices} />
+        <div>
+          <DeviceStatusChart devices={devices} />
+        </div>
       </div>
 
       <div className="mt-4">

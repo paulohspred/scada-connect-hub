@@ -8,6 +8,7 @@ import {
   Users,
   Settings,
   Radio,
+  DownloadCloud,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +21,7 @@ const navItems = [
   { to: "/events", icon: Activity, label: "Eventos" },
   { to: "/users", icon: Users, label: "Usuários" },
   { to: "/settings", icon: Settings, label: "Configurações" },
+  { to: "/updates", icon: DownloadCloud, label: "Atualizações", adminOnly: true },
 ];
 
 export function AppSidebar() {
@@ -34,6 +36,7 @@ export function AppSidebar() {
     .toUpperCase();
 
   const roleLabel = roles.includes("admin") ? "Admin" : roles.includes("operator") ? "Operador" : "Viewer";
+  const visibleNavItems = navItems.filter((i: any) => !i.adminOnly || roles.includes("admin"));
 
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-60 flex-col border-r border-border bg-background">
@@ -50,7 +53,7 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <NavLink

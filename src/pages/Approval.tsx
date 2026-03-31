@@ -45,6 +45,10 @@ const Approval = () => {
 
   const handleReject = async () => {
     if (!selectedDevice) return;
+    const confirmed = window.confirm(
+      `Confirmar rejeição do dispositivo "${selectedDevice.identifier}"?\n\nEsta ação é irreversível e removerá o dispositivo permanentemente.`
+    );
+    if (!confirmed) return;
     try {
       await rejectMutation.mutateAsync(selectedDevice.id);
       toast.error(`Dispositivo ${selectedDevice.identifier.slice(-6)} rejeitado`);

@@ -69,6 +69,7 @@ export type Database = {
           last_seen: string | null
           lat: number | null
           lng: number | null
+          mode: Database["public"]["Enums"]["device_mode"]
           model: string | null
           name: string | null
           observation: string | null
@@ -91,6 +92,7 @@ export type Database = {
           last_seen?: string | null
           lat?: number | null
           lng?: number | null
+          mode?: Database["public"]["Enums"]["device_mode"]
           model?: string | null
           name?: string | null
           observation?: string | null
@@ -113,6 +115,7 @@ export type Database = {
           last_seen?: string | null
           lat?: number | null
           lng?: number | null
+          mode?: Database["public"]["Enums"]["device_mode"]
           model?: string | null
           name?: string | null
           observation?: string | null
@@ -284,9 +287,39 @@ export type Database = {
         Returns: boolean
       }
       reject_device: { Args: { _device_id: string }; Returns: undefined }
+      set_device_mode: {
+        Args: {
+          _device_id: string
+          _mode: Database["public"]["Enums"]["device_mode"]
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          brand: string | null
+          bytes_rx: number | null
+          bytes_tx: number | null
+          created_at: string
+          id: string
+          identifier: string
+          last_ip: string | null
+          last_seen: string | null
+          lat: number | null
+          lng: number | null
+          mode: Database["public"]["Enums"]["device_mode"]
+          model: string | null
+          name: string | null
+          observation: string | null
+          scada_port: number | null
+          signal_dbm: number | null
+          status: Database["public"]["Enums"]["device_status"]
+          type: Database["public"]["Enums"]["device_type"]
+          updated_at: string
+        }
+      }
     }
     Enums: {
       app_role: "admin" | "operator" | "viewer"
+      device_mode: "normal" | "traffic" | "silent" | "maintenance"
       device_status: "pending" | "approved" | "online" | "offline"
       device_type: "RTU" | "CLP" | "Modem"
     }
@@ -417,6 +450,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "operator", "viewer"],
+      device_mode: ["normal", "traffic", "silent", "maintenance"],
       device_status: ["pending", "approved", "online", "offline"],
       device_type: ["RTU", "CLP", "Modem"],
     },

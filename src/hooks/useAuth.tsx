@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -12,7 +12,6 @@ interface AuthContextType {
   roles: AppRole[];
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
 }
@@ -26,36 +25,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Use a ref to track the current user ID and avoid race conditions
+  // between onAuthStateChange and fetchUserData completing
+  const currentUserIdRef = useRef<string | null>(null);
+
   const fetchUserData = async (userId: string) => {
+    // Guard: if user changed while fetching, discard stale result
+    if (currentUserIdRef.current !== userId) return;
+
     const [profileRes, rolesRes] = await Promise.all([
       supabase.from("profiles").select("display_name, avatar_url").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
+
+    // Double-check user hasn't changed since we awaited
+    if (currentUserIdRef.current !== userId) return;
+
     if (profileRes.data) setProfile(profileRes.data);
     if (rolesRes.data) setRoles(rolesRes.data.map((r) => r.role));
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchUserData(session.user.id), 0);
-      } else {
-        setProfile(null);
-        setRoles([]);
-      }
-      setLoading(false);
-    });
-
+    // Initial session fetch
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchUserData(session.user.id);
-      setLoading(false);
+      currentUserIdRef.current = session?.user?.id ?? null;
+      if (session?.user) {
+        fetchUserData(session.user.id).finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const userId = session?.user?.id ?? null;
+      currentUserIdRef.current = userId;
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (!session?.user) {
+        setProfile(null);
+        setRoles([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch user data without setTimeout hack — ref guard prevents stale writes
+      fetchUserData(session.user.id).finally(() => setLoading(false));
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      currentUserIdRef.current = null;
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -63,26 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null };
   };
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { display_name: displayName || email },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    return { error: error as Error | null };
-  };
-
   const signOut = async () => {
+    currentUserIdRef.current = null;
     await supabase.auth.signOut();
   };
 
   const hasRole = (role: AppRole) => roles.includes(role);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, roles, loading, signIn, signUp, signOut, hasRole }}>
+    <AuthContext.Provider value={{ session, user, profile, roles, loading, signIn, signOut, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { formatBytes, type Device } from "@/hooks/useData";
+import { useDeviceHistory } from "@/hooks/useDeviceHistory";
+import { Line, LineChart, ResponsiveContainer, YAxis } from "recharts";
 
 interface Props {
   devices?: Device[];
@@ -7,6 +9,7 @@ interface Props {
 
 export function DeviceTable({ devices = [] }: Props) {
   const filtered = devices.filter(d => d.status !== 'pending');
+  const history = useDeviceHistory(filtered);
 
   const statusDot: Record<string, string> = {
     online: "bg-success animate-pulse-online",
@@ -65,10 +68,26 @@ export function DeviceTable({ devices = [] }: Props) {
                 <td className="px-5 py-3 tabular-nums text-muted-foreground">{formatBytes(device.bytes_rx || 0)}</td>
                 <td className="px-5 py-3 tabular-nums text-muted-foreground">{formatBytes(device.bytes_tx || 0)}</td>
                 <td className="px-5 py-3">
-                  <div className="flex h-4 items-end gap-px">
-                    {Array.from({ length: 8 }, (_, i) => (
-                      <div key={i} className="w-1 rounded-sm bg-primary/40" style={{ height: `${Math.random() * 100}%` }} />
-                    ))}
+                  <div className="h-6 w-16">
+                    {history[device.id] && history[device.id].length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={history[device.id]}>
+                          <YAxis domain={['dataMin', 'dataMax']} hide />
+                          <Line
+                            type="monotone"
+                            dataKey="txRate"
+                            stroke="#f97316"
+                            strokeWidth={1.5}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center">
+                        <span className="text-[10px] text-muted-foreground/50">S/ Dados</span>
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
