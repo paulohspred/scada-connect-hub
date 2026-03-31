@@ -5,9 +5,9 @@ WORKDIR /app
 # Copy package files first for better layer caching
 # Once package-lock.json exists, switch to: COPY package.json package-lock.json ./
 # and use: RUN npm ci --ignore-scripts
-COPY package.json ./
+COPY package.json package-lock.json ./
 
-RUN npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY . .
 

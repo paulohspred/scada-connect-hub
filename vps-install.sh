@@ -56,7 +56,7 @@ ANON_KEY=$(echo $STATUS_JSON | jq -r .ANON_KEY)
 
 echo "VITE_SUPABASE_URL=http://$DOMAIN_IP" > .env
 echo "VITE_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> .env
-echo "VITE_UPDATE_AGENT_URL=http://$DOMAIN_IP/update-agent" >> .env
+echo "VITE_UPDATE_AGENT_URL=/update-agent" >> .env
 
 echo ""
 echo "[4/4] Compilando Web e Aplicando Proxy Front-End Nginx..."

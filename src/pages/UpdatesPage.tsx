@@ -28,13 +28,23 @@ const UpdatesPage = () => {
   const [isSimulatingUpdate, setIsSimulatingUpdate] = useState(false);
   const pollTimer = useRef<number | null>(null);
 
-  const canUseAgent = useMemo(() => !!agentUrl && agentUrl.startsWith("http"), [agentUrl]);
+  const normalizedAgentUrl = useMemo(() => {
+    const raw = (agentUrl ?? "").trim();
+    if (!raw) return null;
+    const noTrailingSlash = raw.endsWith("/") ? raw.slice(0, -1) : raw;
+    return noTrailingSlash || null;
+  }, [agentUrl]);
+
+  const canUseAgent = useMemo(() => {
+    if (!normalizedAgentUrl) return false;
+    return normalizedAgentUrl.startsWith("http") || normalizedAgentUrl.startsWith("/");
+  }, [normalizedAgentUrl]);
 
   const fetchStatus = async () => {
     if (!canUseAgent) return;
     try {
       const token = session?.access_token || "";
-      const res = await fetch(`${agentUrl}/status`, {
+      const res = await fetch(`${normalizedAgentUrl}/status`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = (await res.json()) as UpdateStatus;
@@ -152,7 +162,7 @@ const UpdatesPage = () => {
     setLoading(true);
     try {
       const token = session?.access_token || "";
-      const res = await fetch(`${agentUrl}/update/git`, {
+      const res = await fetch(`${normalizedAgentUrl}/update/git`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
