@@ -14,7 +14,7 @@ services:
 
     # ── Health check ─────────────────────────────────────────────────────
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -36,3 +36,23 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  tcp-gateway:
+    image: denoland/deno:2.2.6
+    working_dir: /app
+    command: ["run", "--allow-net", "--allow-env", "--no-lock", "/app/tcp-gateway.ts"]
+    volumes:
+      - ./:/app:ro
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
+    environment:
+      TCP_PORT_MIN: "5000"
+      TCP_PORT_MAX: "7000"
+      DATABASE_URL: "postgresql://postgres:postgres@host.docker.internal:54322/postgres"
+    ports:
+      - "5000-7000:5000-7000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
